@@ -28,6 +28,7 @@ const router = Router();
 const timePickupDetailsRequest = (_req, res, next) => {
     const startedAt = performance.now();
     _req.pickupDetailsStartedAt = startedAt;
+    _req.pickupDetailsDiagnostics = true;
     res.once("finish", () => {
         console.info(JSON.stringify({
             event: "pickup_details_http",

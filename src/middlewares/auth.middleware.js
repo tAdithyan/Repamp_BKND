@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import ApiError from '../utils/apiError.js';
 import User from '../models/user.model.js';
 import { admin } from "../config/firebaseAdmin.js";
+import { performance } from 'node:perf_hooks';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 
@@ -11,17 +12,29 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
  * Attaches verified user document to req.user.
  */
 export const protect = async (req, res, next) => {
+  const diagnosticStartedAt = req.pickupDetailsDiagnostics ? performance.now() : null;
+  let tokenVerifyMs = null;
+  let userLookupMs = null;
   try {
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       throw new ApiError(401, 'Missing or malformed Authorization header');
     }
     const token = authHeader.split(' ')[1];
+    const verifyStartedAt = req.pickupDetailsDiagnostics ? performance.now() : null;
     const decoded = jwt.verify(token, JWT_SECRET);
+    if (verifyStartedAt !== null) tokenVerifyMs = performance.now() - verifyStartedAt;
     if (!decoded.id || decoded.purpose) throw new ApiError(401, 'Complete registration before signing in');
+    const userLookupStartedAt = req.pickupDetailsDiagnostics ? performance.now() : null;
     const user = await User.findById(decoded.id).select('-password');
+    if (userLookupStartedAt !== null) userLookupMs = performance.now() - userLookupStartedAt;
     if (!user) throw new ApiError(401, 'User no longer exists');
     req.user = user;
+    if (diagnosticStartedAt !== null) console.info(JSON.stringify({
+      event: 'pickup_details_auth',
+      tokenVerifyMs: Number(tokenVerifyMs.toFixed(1)),
+      userLookupMs: Number(userLookupMs.toFixed(1)),
+    }));
     next();
   } catch (err) {
     const message = err.name === 'TokenExpiredError'

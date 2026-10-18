@@ -7,6 +7,7 @@ import { currentBillingMonth, generateMonthlyInvoices } from "../services/monthl
 import RecurringPickup from "../models/recurringPickup.model.js";
 import crypto from "node:crypto";
 import { assertInvoiceAccess } from "../utils/monthlyInvoiceAccess.js";
+import { notifyInvoiceEvent } from '../services/notification.service.js';
 
 export const listMonthlyInvoices = async (req, res, next) => { try {
   const filter = {};
@@ -45,13 +46,17 @@ export const payMonthlyInvoice = async (req, res, next) => { try {
   if (method === "wallet") {
     const user = await User.findById(invoice.customerId);
     if (!user) throw new ApiError(404, "Customer not found");
-    if (Number(user.wallet || 0) < invoice.totalAmount) throw new ApiError(400, `Insufficient wallet balance. Required ₹${invoice.totalAmount}, available ₹${user.wallet || 0}`);
+    if (Number(user.wallet || 0) < invoice.totalAmount) {
+      await notifyInvoiceEvent({ recipientId: req.user._id, invoiceId: invoice._id, event: 'payment_failed', title: 'Invoice payment failed', message: `There is not enough wallet balance to pay the ${invoice.billingMonth} invoice.` });
+      throw new ApiError(400, `Insufficient wallet balance. Required ₹${invoice.totalAmount}, available ₹${user.wallet || 0}`);
+    }
     user.wallet = Number((Number(user.wallet) - invoice.totalAmount).toFixed(2));
     await user.save();
   }
   invoice.status = "paid"; invoice.paidAt = new Date(); invoice.paymentMethod = method;
   await invoice.save();
   await Pickup.updateMany({ _id: { $in: invoice.pickupIds } }, { paymentStatus: "paid" });
+  await notifyInvoiceEvent({ recipientId: req.user._id, invoiceId: invoice._id, event: 'payment_successful', title: 'Invoice payment successful', message: `Your ${invoice.billingMonth} invoice payment of ₹${Number(invoice.totalAmount).toFixed(2)} was successful.` });
   res.json(new ApiResponse(200, invoice, "Monthly invoice paid successfully"));
 } catch (error) { next(error); } };
 
@@ -95,5 +100,6 @@ export const verifyRazorpayPayment = async (req, res, next) => { try {
   invoice.status = "paid"; invoice.paidAt = new Date(); invoice.paymentMethod = "razorpay"; invoice.razorpayPaymentId = razorpay_payment_id;
   await invoice.save();
   await Pickup.updateMany({ _id: { $in: invoice.pickupIds } }, { paymentStatus: "paid" });
+  await notifyInvoiceEvent({ recipientId: req.user._id, invoiceId: invoice._id, event: 'payment_successful', title: 'Invoice payment successful', message: `Your ${invoice.billingMonth} invoice payment of ₹${Number(invoice.totalAmount).toFixed(2)} was successful.` });
   res.json(new ApiResponse(200, invoice, "Online payment verified successfully"));
 } catch (error) { next(error); } };

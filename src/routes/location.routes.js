@@ -77,7 +77,7 @@ const router = Router();
  *         required: false
  *         schema:
  *           type: boolean
- *         description: Return only districts currently enabled for RePamp service
+ *         description: Return only districts currently enabled for REPAMP service
  *     responses:
  *       200:
  *         description: Districts fetched successfully

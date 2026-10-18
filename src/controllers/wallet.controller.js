@@ -3,6 +3,7 @@ import WalletTopup from "../models/walletTopup.model.js";
 import User from "../models/user.model.js";
 import ApiError from "../utils/apiError.js";
 import ApiResponse from "../utils/apiResponse.js";
+import { notifyInvoiceEvent } from '../services/notification.service.js';
 
 const razorpayKeys = () => {
   const keyId = process.env.RAZORPAY_KEY_ID;
@@ -90,5 +91,6 @@ export const verifyWalletTopup = async (req, res, next) => { try {
   claimed.status = "paid";
   claimed.paidAt = claimed.paidAt || new Date();
   await claimed.save();
+  await notifyInvoiceEvent({ recipientId: req.user._id, event: 'payment_successful', title: 'Wallet top-up successful', message: `₹${Number(claimed.amount).toFixed(2)} was added to your wallet.`, dedupeKey: `wallet-topup:${claimed._id}:payment-successful` });
   res.json(new ApiResponse(200, { balance: Number(user.wallet || 0), topup: claimed }, "Wallet credited successfully"));
 } catch (error) { next(error); } };

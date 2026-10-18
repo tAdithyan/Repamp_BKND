@@ -130,6 +130,11 @@ const pickupSchema = new mongoose.Schema(
             trim: true,
             default: null,
         },
+        failureReason: {
+            type: String,
+            trim: true,
+            default: null,
+        },
 
         weighingMethod: {
             type: String,

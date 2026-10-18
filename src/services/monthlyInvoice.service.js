@@ -1,6 +1,7 @@
 import MonthlyInvoice from "../models/monthlyInvoice.model.js";
 import Pickup from "../models/pickup.modal.js";
 import RecurringPickup from "../models/recurringPickup.model.js";
+import { notifyInvoiceEvent } from './notification.service.js';
 
 const monthRange = (billingMonth) => {
   const [year, month] = billingMonth.split("-").map(Number);
@@ -68,6 +69,13 @@ export const generateMonthlyInvoices = async (billingMonth = previousBillingMont
       { _id: { $in: invoice.pickupIds } },
       { paymentStatus: "invoiced", monthlyInvoiceId: invoice._id }
     );
+    if (!existingInvoice) await notifyInvoiceEvent({
+      recipientId: invoice.customerId,
+      invoiceId: invoice._id,
+      event: 'invoice_generated',
+      title: 'Monthly invoice generated',
+      message: `Your ${billingMonth} recurring collection invoice for ₹${totalAmount.toFixed(2)} is ready.`,
+    });
     if (existingInvoice) result.updated += 1;
     else result.created += 1;
   }

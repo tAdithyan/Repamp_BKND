@@ -1,6 +1,7 @@
 import Pickup from "../models/pickup.modal.js";
 import RecurringPickup from "../models/recurringPickup.model.js";
 import { assertPickupDistrictServiceable } from './serviceArea.service.js';
+import { notifyPickupEvent } from './notification.service.js';
 
 const dateKey = (date) => [
   date.getFullYear(),
@@ -37,7 +38,7 @@ const generateRecurringPickupsOnce = async (now) => {
 
       if (!contract.pickupLocation.type) contract.pickupLocation.type = "Point";
       await assertPickupDistrictServiceable(contract.pickupLocation.coordinates[0], contract.pickupLocation.coordinates[1]);
-      await Pickup.create({
+      const pickup = await Pickup.create({
         customerId: contract.customerId,
         operatorId: contract.operatorId || null,
         status: contract.operatorId ? "assigned" : "scheduled",
@@ -52,6 +53,11 @@ const generateRecurringPickupsOnce = async (now) => {
         recurringGenerationKey: generationKey,
         notes: [`Recurring collection: ${contract.name}`, contract.address, contract.notes].filter(Boolean).join(". "),
       });
+      const reminder = `A recurring collection is scheduled for today at ${contract.preferredTime}.`;
+      await Promise.all([
+        notifyPickupEvent({ recipientId: contract.customerId, pickupId: pickup._id, event: 'recurring_pickup_reminder', title: 'Recurring pickup today', message: reminder }),
+        contract.operatorId ? notifyPickupEvent({ recipientId: contract.operatorId, pickupId: pickup._id, event: 'pickup_assigned', title: 'Recurring pickup assigned', message: `${pickup.pickupId} is scheduled for today at ${contract.preferredTime}.` }) : Promise.resolve(),
+      ]);
       contract.lastGeneratedDate = now;
       await contract.save();
       generated += 1;

@@ -7,6 +7,7 @@ import { startRecurringPickupScheduler } from "./services/recurringPickup.servic
 import { startMonthlyInvoiceScheduler } from "./services/monthlyInvoice.service.js";
 import { startShiftCleanupScheduler } from "./services/shift.service.js";
 import { startPickupExpiryScheduler } from "./services/pickupExpiry.service.js";
+import { startExpoPushWorkers } from './services/expoPush.service.js';
 
 dotenv.config();
 
@@ -24,6 +25,7 @@ const startServer = async () => {
     await startRecurringPickupScheduler();
     await startPickupExpiryScheduler();
     await startMonthlyInvoiceScheduler();
+    startExpoPushWorkers();
     startShiftCleanupScheduler();
 
     const server = app.listen(PORT,"0.0.0.0", () => {

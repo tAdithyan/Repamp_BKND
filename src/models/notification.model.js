@@ -2,7 +2,9 @@ import mongoose from "mongoose";
 
 const notificationSchema = new mongoose.Schema({
   recipientId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true },
-  pickupId: { type: mongoose.Schema.Types.ObjectId, ref: "Pickup", required: true, index: true },
+  pickupId: { type: mongoose.Schema.Types.ObjectId, ref: "Pickup", default: null, index: true },
+  invoiceId: { type: mongoose.Schema.Types.ObjectId, ref: "MonthlyInvoice", default: null, index: true },
+  dedupeKey: { type: String, unique: true, sparse: true },
   event: { type: String, required: true },
   title: { type: String, required: true },
   message: { type: String, required: true },

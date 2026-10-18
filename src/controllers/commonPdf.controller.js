@@ -46,7 +46,7 @@ const loadMonthlyInvoicePdf = async (req) => {
   if (req.pdfDocumentType !== "monthly-invoice-link") await assertInvoiceAccess(req.user, invoice);
   return {
     content: createMonthlyInvoicePdf(invoice),
-    filename: `CleanLoop-${invoice.billingMonth}-invoice.pdf`,
+    filename: `REPAMP-${invoice.billingMonth}-invoice.pdf`,
   };
 };
 

@@ -5,7 +5,7 @@ import User from "../models/user.model.js";
 import { ACTIVE_PICKUP_STATUSES, ACTIVE_PICKUP_MESSAGE } from '../constants/pickup-status.js';
 import WastePrice from "../models/wastePrice.model.js";
 import ApiError from "../utils/apiError.js";
-import { notifyPickupEvent } from "./notification.service.js";
+import { notifyPickupEvent, notifyRoleEvent } from "./notification.service.js";
 import { assertPickupDistrictServiceable } from './serviceArea.service.js';
 
 const GST_RATE = 18;
@@ -183,15 +183,29 @@ export const updatePickup = async (id, data) => {
         const pickup = await Pickup.findOneAndUpdate({ _id: id, completionLockId: null }, updateData, { new: true, runValidators: true });
         if (!pickup) throw new ApiError(409, 'Pickup completion is already being processed.');
         const customerId = existingPickup.customerId;
-        if (!existingPickup.operatorId && pickup.operatorId) {
+        if (String(existingPickup.operatorId || '') !== String(pickup.operatorId || '')) {
+            const assigned = Boolean(pickup.operatorId);
+            const assignmentMessage = assigned
+                ? `A collection agent was assigned to ${pickup.pickupId}.`
+                : `The collection agent assigned to ${pickup.pickupId} was removed.`;
             await Promise.all([
-                notifyPickupEvent({ recipientId: customerId, pickupId: pickup._id, event: "operator_assigned", title: "Operator assigned", message: `A collection agent was assigned to ${pickup.pickupId}.` }),
-                notifyPickupEvent({ recipientId: pickup.operatorId, pickupId: pickup._id, event: "pickup_assigned", title: "New pickup assigned", message: `${pickup.pickupId} has been assigned to you.` }),
+                notifyPickupEvent({ recipientId: customerId, pickupId: pickup._id, event: assigned ? "operator_assigned" : "operator_unassigned", title: assigned ? "Operator assigned" : "Operator assignment removed", message: assignmentMessage, dedupeKey: `${pickup._id}:operator-assignment:${pickup.operatorId || 'none'}` }),
+                pickup.operatorId ? notifyPickupEvent({ recipientId: pickup.operatorId, pickupId: pickup._id, event: "pickup_assigned", title: "New pickup assigned", message: `${pickup.pickupId} has been assigned to you.`, dedupeKey: `${pickup._id}:pickup-assigned:${pickup.operatorId}` }) : Promise.resolve(),
+                existingPickup.operatorId ? notifyPickupEvent({ recipientId: existingPickup.operatorId, pickupId: pickup._id, event: "pickup_assignment_changed", title: "Pickup reassigned", message: `${pickup.pickupId} is no longer assigned to you.`, dedupeKey: `${pickup._id}:pickup-unassigned:${existingPickup.operatorId}:${pickup.operatorId || 'none'}` }) : Promise.resolve(),
             ]);
         }
         if (data.status === "on_the_way" && existingPickup.status !== "on_the_way") await notifyPickupEvent({ recipientId: customerId, pickupId: pickup._id, event: "operator_on_the_way", title: "Operator on the way", message: `Your agent is travelling to pickup ${pickup.pickupId}.` });
         if (data.status === "in_progress" && existingPickup.status !== "in_progress") await notifyPickupEvent({ recipientId: customerId, pickupId: pickup._id, event: "pickup_started", title: "Pickup started", message: `Collection has started for ${pickup.pickupId}.` });
         if (data.weight !== undefined && Number(data.weight) > 0 && Number(existingPickup.weight || 0) !== Number(data.weight)) await notifyPickupEvent({ recipientId: customerId, pickupId: pickup._id, event: "weight_recorded", title: "Waste weight recorded", message: `${Number(data.weight).toFixed(2)} kg was recorded for ${pickup.pickupId}.` });
+        if (data.status === 'failed' && existingPickup.status !== 'failed') {
+            const reason = String(data.failureReason || data.notes || '').trim();
+            const message = `${pickup.pickupId} could not be collected${reason ? `: ${reason}` : '.'}`;
+            await Promise.all([
+                notifyPickupEvent({ recipientId: customerId, pickupId: pickup._id, event: 'pickup_failed', title: 'Pickup could not be completed', message, dedupeKey: `${pickup._id}:failed:${pickup.updatedAt?.getTime()}` }),
+                pickup.operatorId ? notifyPickupEvent({ recipientId: pickup.operatorId, pickupId: pickup._id, event: 'pickup_failed', title: 'Pickup marked failed', message, dedupeKey: `${pickup._id}:failed:${pickup.operatorId}:${pickup.updatedAt?.getTime()}` }) : Promise.resolve(),
+                notifyRoleEvent({ role: 'ROL_1', pickupId: pickup._id, event: 'pickup_failed', title: 'Pickup failure needs review', message, dedupeKey: `${pickup._id}:failed:admin:${pickup.updatedAt?.getTime()}` }),
+            ]);
+        }
         return pickup;
     } catch (error) {
         throw error;
@@ -203,8 +217,16 @@ export const updatePickup = async (id, data) => {
 
 export const cancelPickup = async (id, data) => {
     try {
+        const existing = await Pickup.findById(id);
+        if (!existing) throw new ApiError(404, 'Pickup not found');
         const pickup = await Pickup.findOneAndUpdate({ _id: id, completionLockId: null }, { status: "cancelled", cancellationReason: data.cancellationReason }, { new: true });
         if (!pickup) throw new ApiError(409, 'Pickup is unavailable or completion is being processed.');
+        const reason = String(data.cancellationReason || '').trim();
+        const message = `${pickup.pickupId} was cancelled${reason ? `: ${reason}` : '.'}`;
+        await Promise.all([
+            notifyPickupEvent({ recipientId: existing.customerId, pickupId: pickup._id, event: 'pickup_cancelled', title: 'Pickup cancelled', message }),
+            existing.operatorId ? notifyPickupEvent({ recipientId: existing.operatorId, pickupId: pickup._id, event: 'pickup_cancelled', title: 'Pickup assignment cancelled', message }) : Promise.resolve(),
+        ]);
         return pickup;
     } catch (error) {
         throw error;
@@ -271,7 +293,7 @@ const completeVerifiedPickup = async (id) => {
             pickup.paymentStatus = "accrued";
             await pickup.save();
             await Promise.all([
-                notifyPickupEvent({ recipientId: user._id, pickupId: pickup._id, event: "pickup_completed", title: "Pickup completed", message: `${pickup.pickupId} was completed successfully.` }),
+                notifyPickupEvent({ recipientId: user._id, pickupId: pickup._id, event: "pickup_completed", title: "Pickup completed", message: `${pickup.pickupId} was completed successfully. Collected weight: ${Number(pickup.weight).toFixed(2)} kg.` }),
             ]);
             return {
                 status: 200,
@@ -315,7 +337,7 @@ const completeVerifiedPickup = async (id) => {
         pickup.paymentStatus = "paid";
         await pickup.save();
         await Promise.all([
-            notifyPickupEvent({ recipientId: user._id, pickupId: pickup._id, event: "pickup_completed", title: "Pickup completed", message: `${pickup.pickupId} was completed successfully.` }),
+            notifyPickupEvent({ recipientId: user._id, pickupId: pickup._id, event: "pickup_completed", title: "Pickup completed", message: `${pickup.pickupId} was completed successfully. Collected weight: ${Number(pickup.weight).toFixed(2)} kg.` }),
             notifyPickupEvent({ recipientId: user._id, pickupId: pickup._id, event: "bill_generated", title: "Bill generated", message: `A bill of ₹${amount.toFixed(2)} (including 18% GST) was generated for ${pickup.pickupId}.` }),
             notifyPickupEvent({ recipientId: user._id, pickupId: pickup._id, event: "payment_successful", title: "Payment successful", message: `₹${amount.toFixed(2)} was paid from your wallet.` }),
         ]);

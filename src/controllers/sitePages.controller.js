@@ -7,12 +7,12 @@ const PAGE_DEFAULTS = [
   {
     slug: "privacy-policy",
     title: "Privacy Policy",
-    content: "<h2>Your privacy matters</h2><p>This page explains how ReVamp collects, uses, and protects information when you use the waste collection service. The administrator can update this policy from the admin panel.</p><h3>Information and use</h3><p>Information you provide, such as contact details, pickup requests, and service location, is used to provide and improve the service and to communicate with you about your account and pickups.</p><h3>Your choices</h3><p>Contact our support team if you have questions about your information or want to request an update.</p>",
+    content: "<h2>Your privacy matters</h2><p>This page explains how REPAMP collects, uses, and protects information when you use the waste collection service. The administrator can update this policy from the admin panel.</p><h3>Information and use</h3><p>Information you provide, such as contact details, pickup requests, and service location, is used to provide and improve the service and to communicate with you about your account and pickups.</p><h3>Your choices</h3><p>Contact our support team if you have questions about your information or want to request an update.</p>",
   },
   {
     slug: "about-us",
     title: "About Us",
-    content: "<h2>About ReVamp</h2><p>We make it easier for communities to manage waste responsibly through convenient pickup scheduling and collection services.</p><h3>Our service</h3><p>Use the app to schedule pickups, follow your collection history, and get support from our team.</p>",
+    content: "<h2>About REPAMP</h2><p>We make it easier for communities to manage waste responsibly through convenient pickup scheduling and collection services.</p><h3>Our service</h3><p>Use the app to schedule pickups, follow your collection history, and get support from our team.</p>",
     socialLinks: [],
   },
 ];

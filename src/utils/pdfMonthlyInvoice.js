@@ -2,7 +2,7 @@ const escapePdf = (value) => String(value ?? "").replace(/([\\()])/g, "\\$1");
 export const createMonthlyInvoicePdf = (invoice) => {
   const customer = invoice.customerId || {}, contract = invoice.recurringContractId || {};
   const lines = [
-    ["CLEANLOOP",20,true],["Recurring Waste Collection Invoice",16,true],["",7],
+    ["REPAMP",20,true],["Recurring Waste Collection Invoice",16,true],["",7],
     [`Invoice ID: ${invoice._id}`,10],[`Billing month: ${invoice.billingMonth}`,10],
     [`Issued: ${new Date(invoice.issuedAt).toLocaleDateString("en-IN")}`,10],
     [`Due date: ${new Date(invoice.dueDate).toLocaleDateString("en-IN")}`,10],["",7],

@@ -28,7 +28,7 @@ const checkDistrictAndRadiusServiceability = async (coordinates, DistrictModel, 
   ]);
   const [longitude, latitude] = coordinates;
   const radiusService = nearbyAreas.find(area => distanceMeters(latitude, longitude, area.center.coordinates[1], area.center.coordinates[0]) <= area.radiusMeters);
-  if (!boundaryCount && !activeRadiusCount) throw new ApiError(503, 'Kerala district boundary data is not configured. Please contact RePamp support.');
+  if (!boundaryCount && !activeRadiusCount) throw new ApiError(503, 'Kerala district boundary data is not configured. Please contact REPAMP support.');
 
   const districts = boundaryCount ? await DistrictModel.find({
     stateCode: KERALA_STATE_CODE,

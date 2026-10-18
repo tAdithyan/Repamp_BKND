@@ -18,7 +18,7 @@ export const createPickupReceiptPdf = (pickup) => {
     .filter(Boolean)
     .join(", ");
   const lines = [
-    ["CLEANLOOP", 20, true],
+    ["REPAMP", 20, true],
     ["Waste Collection Receipt", 16, true],
     ["", 10],
     [`Receipt / Pickup ID: ${pickup.pickupId || pickup._id}`, 11],
@@ -42,7 +42,7 @@ export const createPickupReceiptPdf = (pickup) => {
     ["Payment method: Customer wallet", 11],
     ["Status: PAID / COLLECTION COMPLETED", 11, true],
     ["", 10],
-    ["Thank you for using CleanLoop.", 10],
+    ["Thank you for using REPAMP.", 10],
   ];
 
   let y = 790;

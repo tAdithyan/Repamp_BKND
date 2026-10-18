@@ -7,6 +7,7 @@ import WastePrice from "../models/wastePrice.model.js";
 import ApiError from "../utils/apiError.js";
 import { notifyPickupEvent, notifyRoleEvent } from "./notification.service.js";
 import { assertPickupDistrictServiceable } from './serviceArea.service.js';
+import { performance } from 'node:perf_hooks';
 
 const GST_RATE = 18;
 const calculateCharge = (weight, ratePerKg) => {
@@ -71,11 +72,53 @@ export const getAllPickups = async (user = null, filters = {}) => {
 
 
 
-export const getPickupById = async (id) => {
+export const buildPickupDetailsFilter = (id, user, clientContractIds = []) => {
+    const filter = { _id: id };
+    const role = String(user?.role || "");
+    const userId = user?._id;
+    if (userId && ["ROL_5", "User"].includes(role)) filter.customerId = userId;
+    else if (userId && ["ROL_4", "CollectionAgent"].includes(role)) filter.operatorId = userId;
+    else if (userId && ["ROL_6", "CLIENT_ADMIN"].includes(role)) {
+        filter.recurringContractId = { $in: clientContractIds };
+    }
+    return filter;
+};
+
+export const getPickupById = async (id, user = null) => {
     try {
-        const pickup = await Pickup.findById(id)
-            .populate("customerId operatorId")
-            .populate("recurringContractId", "name collectionDays preferredTime ratePerKg address");
+        let clientAdminScopeMs = 0;
+        const role = String(user?.role || "");
+        const userId = user?._id;
+        let clientContractIds = [];
+        if (userId && ["ROL_6", "CLIENT_ADMIN"].includes(role)) {
+            const scopeStartedAt = performance.now();
+            const RecurringPickup = (await import("../models/recurringPickup.model.js")).default;
+            clientContractIds = await RecurringPickup.find({
+                $or: [{ clientAdminId: userId }, { customerId: userId }],
+            }).distinct("_id");
+            clientAdminScopeMs = Number((performance.now() - scopeStartedAt).toFixed(1));
+        }
+        const filter = buildPickupDetailsFilter(id, user, clientContractIds);
+
+        const lookupStartedAt = performance.now();
+        const pickup = await Pickup.findOne(filter).exec();
+        const lookupMs = Number((performance.now() - lookupStartedAt).toFixed(1));
+
+        const populationStartedAt = performance.now();
+        if (pickup) {
+            await pickup.populate([
+                { path: "customerId" },
+                { path: "operatorId" },
+                { path: "recurringContractId", select: "name collectionDays preferredTime ratePerKg address" },
+            ]);
+        }
+        console.info(JSON.stringify({
+            event: "pickup_details_database",
+            clientAdminScopeMs,
+            lookupMs,
+            populationMs: Number((performance.now() - populationStartedAt).toFixed(1)),
+            found: Boolean(pickup),
+        }));
         return pickup;
     } catch (error) {
         throw error;

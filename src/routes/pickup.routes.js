@@ -19,8 +19,26 @@ import { authorize } from "../middlewares/role.middleware.js";
 import { createReceiptLinkController, viewReceiptHtmlController } from "../controllers/receipt.controller.js";
 import { downloadPdfController, setPdfDocumentType } from "../controllers/commonPdf.controller.js";
 import { previewPickupRoute } from "../controllers/bin-route.controller.js";
+import { performance } from "node:perf_hooks";
 
 const router = Router();
+
+// Diagnostic timing for the authenticated pickup-details request. Do not log
+// pickup IDs, user IDs, headers, or response bodies.
+const timePickupDetailsRequest = (_req, res, next) => {
+    const startedAt = performance.now();
+    _req.pickupDetailsStartedAt = startedAt;
+    res.once("finish", () => {
+        console.info(JSON.stringify({
+            event: "pickup_details_http",
+            durationMs: Number((performance.now() - startedAt).toFixed(1)),
+            status: res.statusCode,
+            responseBytes: Number(res.getHeader("content-length")) || null,
+        }));
+    });
+    next();
+};
+
 router.post("/:id/route-preview", protect, authorize(["PERM_PICKUP_READ"]), previewPickupRoute);
 
 router.get("/:id/receipt.pdf", setPdfDocumentType("pickup-receipt"), downloadPdfController);
@@ -257,6 +275,7 @@ router.get(
  */
 router.get(
     "/:id",
+    timePickupDetailsRequest,
     protect,
     authorize(["PERM_PICKUP_READ"]),
     getPickupByIdController

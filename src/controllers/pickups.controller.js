@@ -1,5 +1,6 @@
 import ApiResponse from "../utils/apiResponse.js";
 import ApiError from "../utils/apiError.js";
+import { performance } from "node:perf_hooks";
 import { requestPickupOtp } from '../services/pickupOtp.service.js';
 
 export const requestCompletionOtpController = async (req, res, next) => {
@@ -57,8 +58,16 @@ export const getAllPickupsController = async (req, res, next) => {
 export const getPickupByIdController = async (req, res, next) => {
     try {
         const { id } = req.params;
-
-        const pickup = await getPickupById(id);
+        const serviceStartedAt = performance.now();
+        const pickup = await getPickupById(id, req.user);
+        console.info(JSON.stringify({
+            event: "pickup_details_query_and_population",
+            durationMs: Number((performance.now() - serviceStartedAt).toFixed(1)),
+            authAndPermissionMs: req.pickupDetailsStartedAt
+                ? Number((serviceStartedAt - req.pickupDetailsStartedAt).toFixed(1))
+                : null,
+            found: Boolean(pickup),
+        }));
 
         return res
             .status(200)

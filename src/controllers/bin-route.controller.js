@@ -1,5 +1,6 @@
 import Bin from '../models/bin.model.js';
 import Pickup from '../models/pickup.modal.js';
+import { buildPickupDetailsFilter } from '../services/pickup.service.js';
 import ApiError from '../utils/apiError.js';
 import ApiResponse from '../utils/apiResponse.js';
 
@@ -108,11 +109,17 @@ export async function previewBinRoute(req, res, next) {
 
 export async function previewPickupRoute(req, res, next) {
   try {
-    if (req.user.role !== 'ROL_4') throw new ApiError(403, 'Collection Agent access required');
     if (!/^[a-f\d]{24}$/i.test(req.params.id)) throw new ApiError(400, 'Invalid pickup ID');
     if (!validPoint(req.body.origin)) throw new ApiError(400, 'Valid starting coordinates are required');
-    const pickup = await Pickup.findOne({ _id: req.params.id, operatorId: req.user._id });
-    if (!pickup) throw new ApiError(404, 'Assigned pickup not found');
+    let clientContractIds = [];
+    if (['ROL_6', 'CLIENT_ADMIN'].includes(String(req.user?.role || ''))) {
+      const RecurringPickup = (await import('../models/recurringPickup.model.js')).default;
+      clientContractIds = await RecurringPickup.find({
+        $or: [{ clientAdminId: req.user._id }, { customerId: req.user._id }],
+      }).distinct('_id');
+    }
+    const pickup = await Pickup.findOne(buildPickupDetailsFilter(req.params.id, req.user, clientContractIds));
+    if (!pickup) throw new ApiError(404, 'Pickup not found or access denied');
     const [longitude, latitude] = pickup.pickupLocation?.coordinates || [];
     const destination = { latitude: Number(latitude), longitude: Number(longitude) };
     if (!validPoint(destination)) throw new ApiError(400, 'This pickup has no valid GPS location');

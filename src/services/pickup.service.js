@@ -262,9 +262,16 @@ export const cancelPickup = async (id, data) => {
     try {
         const existing = await Pickup.findById(id);
         if (!existing) throw new ApiError(404, 'Pickup not found');
-        const pickup = await Pickup.findOneAndUpdate({ _id: id, completionLockId: null }, { status: "cancelled", cancellationReason: data.cancellationReason }, { new: true });
-        if (!pickup) throw new ApiError(409, 'Pickup is unavailable or completion is being processed.');
         const reason = String(data.cancellationReason || '').trim();
+        if (!ACTIVE_PICKUP_STATUSES.includes(existing.status)) {
+            throw new ApiError(409, 'Only active pickups can be cancelled.');
+        }
+        const pickup = await Pickup.findOneAndUpdate(
+            { _id: id, status: { $in: ACTIVE_PICKUP_STATUSES }, completionLockId: null },
+            { status: "cancelled", cancellationReason: reason },
+            { new: true }
+        );
+        if (!pickup) throw new ApiError(409, 'Pickup is unavailable or completion is being processed.');
         const message = `${pickup.pickupId} was cancelled${reason ? `: ${reason}` : '.'}`;
         await Promise.all([
             notifyPickupEvent({ recipientId: existing.customerId, pickupId: pickup._id, event: 'pickup_cancelled', title: 'Pickup cancelled', message }),

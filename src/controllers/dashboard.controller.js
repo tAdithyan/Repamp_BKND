@@ -9,6 +9,7 @@ import ApiResponse from "../utils/apiResponse.js";
 export const getOperationsDashboard = async (req, res, next) => {
   try {
     const isAgent = req.user.role === "ROL_4";
+    const isAdmin = ["ROL_1", "ROL_2", "SuperAdmin", "Admin"].includes(req.user.role);
     const pickupFilter = isAgent ? { operatorId: req.user._id } : {};
     const binFilter = isAgent ? { assignedAgent: req.user._id } : {};
     const sixMonthsAgo = new Date();
@@ -17,7 +18,7 @@ export const getOperationsDashboard = async (req, res, next) => {
 
     // Aggregate on MongoDB instead of downloading every user, pickup, bin and invoice
     // and calculating dashboard totals in the Node process.
-    const [userGroups, pickupGroups, binGroups, activeContracts, invoiceGroups, activeShifts, monthly, recentPickups] = await Promise.all([
+    const [userGroups, pickupGroups, binGroups, activeContracts, invoiceGroups, pendingInvoices, activeShifts, monthly, recentPickups] = await Promise.all([
       isAgent ? [] : User.aggregate([
         { $group: { _id: "$role", total: { $sum: 1 }, active: { $sum: { $cond: [{ $ne: ["$is_active", false] }, 1, 0] } } } },
       ]),
@@ -33,6 +34,13 @@ export const getOperationsDashboard = async (req, res, next) => {
       isAgent ? [] : MonthlyInvoice.aggregate([
         { $group: { _id: "$status", count: { $sum: 1 }, amount: { $sum: { $ifNull: ["$totalAmount", 0] } } } },
       ]),
+      isAdmin ? MonthlyInvoice.find({ status: { $in: ["issued", "overdue"] } })
+        .select("billingMonth status totalAmount dueDate customerId recurringContractId")
+        .populate("customerId", "name")
+        .populate("recurringContractId", "name")
+        .sort({ dueDate: 1, issuedAt: 1 })
+        .limit(5)
+        .lean() : [],
       Shift.countDocuments(isAgent ? { agentId: req.user._id, status: "active" } : { status: "active" }),
       Pickup.aggregate([
         { $match: { ...pickupFilter, status: "completed", preferredDate: { $gte: sixMonthsAgo } } },
@@ -93,7 +101,11 @@ export const getOperationsDashboard = async (req, res, next) => {
       },
       bins,
       recurring: { active: activeContracts },
-      billing: { ...invoices, outstanding: Number(invoices.outstanding.toFixed(2)) },
+      billing: {
+        ...invoices,
+        outstanding: Number(invoices.outstanding.toFixed(2)),
+        pendingInvoices: isAdmin ? pendingInvoices : [],
+      },
       activeShifts,
       monthlyTrend,
       recentPickups,

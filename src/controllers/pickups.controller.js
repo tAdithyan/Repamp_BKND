@@ -2,6 +2,9 @@ import ApiResponse from "../utils/apiResponse.js";
 import ApiError from "../utils/apiError.js";
 import { performance } from "node:perf_hooks";
 import { requestPickupOtp } from '../services/pickupOtp.service.js';
+import { sendEmail } from '../services/email.service.js';
+import { loadCompletedPickup } from './receipt.controller.js';
+import { createPickupReceiptPdf } from '../utils/pdfReceipt.js';
 
 export const requestCompletionOtpController = async (req, res, next) => {
     try {
@@ -253,6 +256,27 @@ export const completePickupController = async (
         const { id } = req.params;
 
         const result = await completePickup(id, req.body, req.user);
+
+        const recipientEmail = result?.data?.user?.email || result?.data?.pickup?.customerId?.email;
+        if (recipientEmail) {
+            try {
+                const pickup = await loadCompletedPickup(id);
+                const receiptNumber = pickup.pickupId || String(pickup._id);
+                await sendEmail({
+                    to: recipientEmail,
+                    subject: `Your REPAMP collection receipt · ${receiptNumber}`,
+                    text: `Hello ${pickup.customerId?.name || 'there'},\n\nYour waste collection has been completed. Your receipt for ${receiptNumber} is attached as a PDF.\n\nThank you for choosing REPAMP.`,
+                    attachments: [{
+                        filename: `${receiptNumber}-receipt.pdf`,
+                        content: createPickupReceiptPdf(pickup),
+                        contentType: 'application/pdf',
+                    }],
+                });
+            } catch (emailError) {
+                // A mail server failure must not roll back an already completed collection.
+                console.warn('[email] pickup receipt could not be sent', emailError?.name || 'Error');
+            }
+        }
 
         return res
             .status(200)

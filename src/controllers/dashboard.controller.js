@@ -4,13 +4,31 @@ import Pickup from "../models/pickup.modal.js";
 import RecurringPickup from "../models/recurringPickup.model.js";
 import Shift from "../models/shift.model.js";
 import User from "../models/user.model.js";
+import ApiError from "../utils/apiError.js";
 import ApiResponse from "../utils/apiResponse.js";
+
+const istMonthRange = (month) => {
+  if (!month) return null;
+  if (typeof month !== 'string' || !/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) {
+    throw new ApiError(400, 'Select a valid month in YYYY-MM format');
+  }
+  const [year, monthNumber] = month.split('-').map(Number);
+  const istOffsetMs = 330 * 60 * 1000;
+  return {
+    start: new Date(Date.UTC(year, monthNumber - 1, 1) - istOffsetMs),
+    end: new Date(Date.UTC(year, monthNumber, 1) - istOffsetMs),
+  };
+};
 
 export const getOperationsDashboard = async (req, res, next) => {
   try {
     const isAgent = req.user.role === "ROL_4";
     const isAdmin = ["ROL_1", "ROL_2", "SuperAdmin", "Admin"].includes(req.user.role);
     const pickupFilter = isAgent ? { operatorId: req.user._id } : {};
+    const monthRange = istMonthRange(req.query.month);
+    const dashboardPickupFilter = monthRange
+      ? { ...pickupFilter, preferredDate: { $gte: monthRange.start, $lt: monthRange.end } }
+      : pickupFilter;
     const binFilter = isAgent ? { assignedAgent: req.user._id } : {};
     const sixMonthsAgo = new Date();
     sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5, 1);
@@ -23,7 +41,7 @@ export const getOperationsDashboard = async (req, res, next) => {
         { $group: { _id: "$role", total: { $sum: 1 }, active: { $sum: { $cond: [{ $ne: ["$is_active", false] }, 1, 0] } } } },
       ]),
       Pickup.aggregate([
-        { $match: pickupFilter },
+        { $match: dashboardPickupFilter },
         { $group: { _id: "$status", count: { $sum: 1 }, weight: { $sum: { $cond: [{ $eq: ["$status", "completed"] }, { $ifNull: ["$weight", 0] }, 0] } }, amount: { $sum: { $cond: [{ $eq: ["$status", "completed"] }, { $ifNull: ["$amount", 0] }, 0] } } } },
       ]),
       Bin.aggregate([
@@ -47,7 +65,7 @@ export const getOperationsDashboard = async (req, res, next) => {
         { $group: { _id: { year: { $year: "$preferredDate" }, month: { $month: "$preferredDate" } }, weight: { $sum: "$weight" }, amount: { $sum: "$amount" }, collections: { $sum: 1 } } },
         { $sort: { "_id.year": 1, "_id.month": 1 } },
       ]),
-      Pickup.find(pickupFilter).select("pickupId customerId wasteType status amount createdAt")
+      Pickup.find(dashboardPickupFilter).select("pickupId customerId wasteType status amount createdAt")
         .populate("customerId", "name")
         .sort({ createdAt: -1 }).limit(7).lean(),
     ]);

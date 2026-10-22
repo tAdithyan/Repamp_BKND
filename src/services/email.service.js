@@ -1,73 +1,68 @@
+import 'dotenv/config';
 import nodemailer from 'nodemailer';
 
 let transporter;
 let transporterSignature;
 
-function readSmtpConfig() {
-  const user = (process.env.SMTP_USER || process.env.EMAIL_USER)?.trim();
-  const pass = process.env.SMTP_PASS || process.env.EMAIL_APP_PASSWORD;
-  const isGmail = user?.toLowerCase().endsWith('@gmail.com');
-  const host = (process.env.SMTP_HOST || (isGmail ? 'smtp.gmail.com' : ''))?.trim();
-  const port = Number(process.env.SMTP_PORT || (isGmail ? 465 : 587));
-
+function readGmailConfig() {
+  const user = process.env.EMAIL_USER?.trim();
+  const pass = process.env.EMAIL_APP_PASSWORD?.replace(/\s+/g, '');
   const missing = [
-    ['SMTP_HOST', host],
-    ['SMTP_USER', user],
-    ['SMTP_PASS', pass],
-  ].filter(([, value]) => !value).map(([key]) => key);
+    ['EMAIL_USER', user],
+    ['EMAIL_APP_PASSWORD', pass],
+  ].filter(([, value]) => !value).map(([name]) => name);
 
   if (missing.length) {
-    throw new Error(`Email is not configured. Set ${missing.join(', ')} in the backend environment.`);
+    throw new Error(`Email is not configured. Set ${missing.join(' and ')} in the backend environment.`);
   }
-  if (!Number.isInteger(port) || port < 1 || port > 65535) {
-    throw new Error('SMTP_PORT must be a valid port between 1 and 65535.');
+  if (!/^[^\s@]+@gmail\.com$/i.test(user)) {
+    throw new Error('EMAIL_USER must be a Gmail address for the Gmail mailer.');
   }
 
-  return {
-    host,
-    port,
-    secure: process.env.SMTP_SECURE === undefined
-      ? port === 465
-      : process.env.SMTP_SECURE.toLowerCase() === 'true',
-    user,
-    pass,
-    from: process.env.SMTP_FROM?.trim() || process.env.EMAIL_USER?.trim() || user,
-  };
+  return { user, pass };
 }
 
-function getTransporter(config) {
-  const signature = JSON.stringify([config.host, config.port, config.secure, config.user, config.pass]);
+function getTransporter({ user, pass }) {
+  const signature = `${user}\u0000${pass}`;
   if (!transporter || signature !== transporterSignature) {
     transporter = nodemailer.createTransport({
-      host: config.host,
-      port: config.port,
-      secure: config.secure,
-      auth: { user: config.user, pass: config.pass },
+      service: 'gmail',
+      auth: { user, pass },
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
+      socketTimeout: 15000,
     });
     transporterSignature = signature;
   }
   return transporter;
 }
 
-/** Send email through the backend's shared SMTP transporter. */
-export async function sendEmail({ to, subject, text, html, ...options }) {
-  if (!to) throw new TypeError('An email recipient is required.');
-  if (!subject) throw new TypeError('An email subject is required.');
-  if (!text && !html) throw new TypeError('Email content is required in text or html form.');
+/** Send an email through Gmail using the shared Nodemailer transport. */
+export async function sendEmail(message = {}) {
+  const { to, subject, text, html, ...messageOptions } = message || {};
+  if (!to || (Array.isArray(to) && to.length === 0)) {
+    throw new TypeError('An email recipient is required.');
+  }
+  if (typeof subject !== 'string' || !subject.trim()) {
+    throw new TypeError('A non-empty email subject is required.');
+  }
+  if (!(typeof text === 'string' && text.trim()) && !(typeof html === 'string' && html.trim())) {
+    throw new TypeError('Email content is required in text or html form.');
+  }
 
-  const config = readSmtpConfig();
+  const config = readGmailConfig();
   return getTransporter(config).sendMail({
-    ...options,
-    from: config.from,
+    ...messageOptions,
+    from: config.user,
     to,
-    subject,
+    subject: subject.trim(),
     ...(text ? { text } : {}),
     ...(html ? { html } : {}),
   });
 }
 
-/** Check SMTP credentials and connectivity without sending a message. */
+/** Verify Gmail authentication/connectivity. This does not send a message. */
 export async function verifyEmailConfiguration() {
-  const config = readSmtpConfig();
+  const config = readGmailConfig();
   return getTransporter(config).verify();
 }

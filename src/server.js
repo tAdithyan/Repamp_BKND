@@ -1,4 +1,4 @@
-import dotenv from "dotenv";
+import "dotenv/config";
 import app from "./app.js";
 import connectDB from "./config/db.js";
 import { seedDefaultPermissions } from "./services/permission.service.js";
@@ -8,8 +8,6 @@ import { startMonthlyInvoiceScheduler } from "./services/monthlyInvoice.service.
 import { startShiftCleanupScheduler } from "./services/shift.service.js";
 import { startPickupExpiryScheduler } from "./services/pickupExpiry.service.js";
 import { startExpoPushWorkers } from './services/expoPush.service.js';
-
-dotenv.config();
 
 const PORT = process.env.PORT || 5000;
 

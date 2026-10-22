@@ -6,6 +6,33 @@ import { sendEmail } from '../services/email.service.js';
 import { loadCompletedPickup } from './receipt.controller.js';
 import { createPickupReceiptPdf } from '../utils/pdfReceipt.js';
 
+async function queueCompletedPickupReceiptEmail(id) {
+    const pickup = await loadCompletedPickup(id);
+    const recipientEmail = pickup.customerId?.email?.trim();
+    if (!recipientEmail) {
+        console.warn('[email] pickup receipt skipped: customer email is missing');
+        return false;
+    }
+
+    const receiptNumber = pickup.pickupId || String(pickup._id);
+    void sendEmail({
+        to: recipientEmail,
+        subject: `Your REPAMP collection receipt · ${receiptNumber}`,
+        text: `Hello ${pickup.customerId?.name || 'there'},\n\nYour waste collection has been completed. Your receipt for ${receiptNumber} is attached as a PDF.\n\nThank you for choosing REPAMP.`,
+        attachments: [{
+            filename: `${receiptNumber}-receipt.pdf`,
+            content: createPickupReceiptPdf(pickup),
+            contentType: 'application/pdf',
+        }],
+    }).then(() => {
+        console.info('[email] pickup receipt sent');
+    }).catch((emailError) => {
+        // Email delivery must not hold up or roll back a completed pickup.
+        console.warn('[email] pickup receipt delivery failed', emailError?.code || emailError?.name || 'Error');
+    });
+    return true;
+}
+
 export const requestCompletionOtpController = async (req, res, next) => {
     try {
         const result = await requestPickupOtp(req.params.id, req.user);
@@ -256,27 +283,9 @@ export const completePickupController = async (
         const { id } = req.params;
 
         const result = await completePickup(id, req.body, req.user);
-
-        const recipientEmail = result?.data?.user?.email || result?.data?.pickup?.customerId?.email;
-        if (recipientEmail) {
-            try {
-                const pickup = await loadCompletedPickup(id);
-                const receiptNumber = pickup.pickupId || String(pickup._id);
-                await sendEmail({
-                    to: recipientEmail,
-                    subject: `Your REPAMP collection receipt · ${receiptNumber}`,
-                    text: `Hello ${pickup.customerId?.name || 'there'},\n\nYour waste collection has been completed. Your receipt for ${receiptNumber} is attached as a PDF.\n\nThank you for choosing REPAMP.`,
-                    attachments: [{
-                        filename: `${receiptNumber}-receipt.pdf`,
-                        content: createPickupReceiptPdf(pickup),
-                        contentType: 'application/pdf',
-                    }],
-                });
-            } catch (emailError) {
-                // A mail server failure must not roll back an already completed collection.
-                console.warn('[email] pickup receipt could not be sent', emailError?.name || 'Error');
-            }
-        }
+        void queueCompletedPickupReceiptEmail(id).catch((emailError) => {
+            console.warn('[email] pickup receipt could not be prepared', emailError?.code || emailError?.name || 'Error');
+        });
 
         return res
             .status(200)
@@ -288,6 +297,17 @@ export const completePickupController = async (
                 )
             );
     } catch (error) {
+        // If the client retried after the server completed the pickup but timed out
+        // while delivering the first email, queue the receipt again on this retry.
+        if (error?.message === 'Pickup is already completed') {
+            try {
+                if (await queueCompletedPickupReceiptEmail(req.params.id)) {
+                    return res.status(200).json(new ApiResponse(200, { status: 'completed' }, 'Pickup is complete; receipt email retry started'));
+                }
+            } catch (emailError) {
+                console.warn('[email] pickup receipt could not be prepared', emailError?.code || emailError?.name || 'Error');
+            }
+        }
         next(error);
     }
 };

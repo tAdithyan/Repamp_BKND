@@ -10,6 +10,12 @@ export const createPickupReceiptPdf = (pickup) => {
   const taxableAmount = Number(pickup.taxableAmount || amount / 1.18 || 0);
   const gstAmount = Number(pickup.gstAmount || Number((taxableAmount * 0.18).toFixed(2)));
   const pricePerKg = Number(pickup.ratePerKg || (weight > 0 ? taxableAmount / weight : 0));
+  const paymentStatus = ({
+    paid: "Paid from customer wallet",
+    accrued: "Due with monthly invoice",
+    invoiced: "Included in monthly invoice",
+    overdue: "Payment overdue",
+  })[pickup.paymentStatus] || "Payment status unavailable";
   const coordinates = pickup.pickupLocation?.coordinates;
   const gpsLocation = coordinates?.length === 2
     ? `Latitude: ${coordinates[1]}, Longitude: ${coordinates[0]}`
@@ -39,8 +45,8 @@ export const createPickupReceiptPdf = (pickup) => {
     [`GST (18%): INR ${gstAmount.toFixed(2)}`, 11],
     [`Billing amount (incl. GST): INR ${amount.toFixed(2)}`, 14, true],
     ["", 10],
-    ["Payment method: Customer wallet", 11],
-    ["Status: PAID / COLLECTION COMPLETED", 11, true],
+    [`Payment status: ${paymentStatus}`, 11],
+    ["Status: COLLECTION COMPLETED", 11, true],
     ["", 10],
     ["Thank you for using REPAMP.", 10],
   ];

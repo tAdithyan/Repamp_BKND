@@ -6,7 +6,7 @@ import { addShiftLocation, getActiveShift, listActiveAgentShifts, recordShiftAct
 
 const router = Router();
 router.get('/agents', protect, authorize(['PERM_COLLECTION_READ']), listAgentDetails);
-router.get("/", protect, authorize(["PERM_COLLECTION_READ"]), listActiveAgentShifts);
+router.get("/", protect, authorize(["PERM_MAP_READ"]), listActiveAgentShifts);
 router.get("/active", protect, getActiveShift);
 router.post("/start", protect, startShift);
 router.post("/:id/location", protect, addShiftLocation);

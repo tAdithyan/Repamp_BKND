@@ -28,3 +28,9 @@ jobs:
 
       - name: Validate Backend Entry Point
         run: node --check src/server.js
+
+      - name: Deploy to Render
+        if: github.ref == 'refs/heads/main'
+        env:
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: curl --fail --silent --show-error "$RENDER_DEPLOY_HOOK_URL"

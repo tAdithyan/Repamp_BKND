@@ -7,7 +7,7 @@ import {
   listRadiusServiceAreas,
   createRadiusServiceArea,
   updateRadiusServiceAreaStatus,
-  deleteRadiusServiceArea
+  deleteRadiusServiceAreas
 } from "../services/serviceArea.service.js";
 
 export const checkLocationServiceability = async (req, res, next) => {
@@ -93,7 +93,7 @@ export const patchRadiusServiceArea = async (req, res, next) => {
 
 export const deleteRadiusServiceArea = async (req, res, next) => {
   try {
-    const area = await deleteRadiusServiceArea(req.params.id, req.user._id);
+    const area = await deleteRadiusServiceAreas(req.params.id, req.user._id);
     res.json(new ApiResponse(200, area, "Radius service area deleted."));
   } catch (error) {
     next(error);

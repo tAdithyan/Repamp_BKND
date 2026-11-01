@@ -21,10 +21,10 @@ export const seedDefaultRoles = async () => {
       "PERM_COLLECTION_READ", "PERM_COLLECTION_CREATE", "PERM_COLLECTION_UPDATE", "PERM_COLLECTION_MANAGE",
       "PERM_PICKUP_READ", "PERM_PICKUP_UPDATE", "PERM_PICKUP_CANCEL",
       "PERM_BIN_READ", "PERM_BIN_UPDATE",
-      "PERM_LOCATION_MANAGE", "PERM_REPORTS_READ", "PERM_REPORTS_EXPORT"
+      "PERM_LOCATION_MANAGE", "PERM_MAP_READ", "PERM_REPORTS_READ", "PERM_REPORTS_EXPORT"
     ]),
     ROL_3: getPermIds([
-      "PERM_USER_READ", "PERM_COLLECTION_READ", "PERM_COLLECTION_UPDATE", "PERM_LOCATION_MANAGE", "PERM_REPORTS_READ",
+      "PERM_USER_READ", "PERM_COLLECTION_READ", "PERM_COLLECTION_UPDATE", "PERM_LOCATION_MANAGE", "PERM_MAP_READ", "PERM_REPORTS_READ",
       "PERM_PICKUP_READ", "PERM_PICKUP_UPDATE",
       "PERM_BIN_READ", "PERM_BIN_UPDATE"
     ]),
@@ -50,10 +50,16 @@ export const seedDefaultRoles = async () => {
     const permissions = rolePermissionAssignments[roleData.roleId] || [];
     await Role.updateOne(
       { roleId: roleData.roleId },
-      { $set: { ...roleData, permissions } },
+      { $set: roleData, $setOnInsert: { permissions } },
       { upsert: true }
     );
   }
+  // Keep the superadmin role fully privileged while preserving permission
+  // choices made for every other role in Permission Management.
+  await Role.updateOne(
+    { roleId: "ROL_1" },
+    { $set: { permissions: Object.values(permMap) } }
+  );
   await User.updateMany(
     { role: { $in: ["CLIENT_ADMIN", "ROLE_6"] } },
     { $set: { role: "ROL_6" } }

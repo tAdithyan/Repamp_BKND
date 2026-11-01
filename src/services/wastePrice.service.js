@@ -16,3 +16,13 @@ export const upsertWastePrice = async (category, pricePerKg) => {
     { new: true, upsert: true, runValidators: true }
   );
 };
+
+
+
+export const deleteWastePrice = async (category) => {
+  const cleanCategory = decodeURIComponent(category || "").trim();
+  if (!cleanCategory) throw new ApiError(400, "Waste category is required");
+  const deletedPrice = await WastePrice.findOneAndDelete({ category: cleanCategory });
+  if (!deletedPrice) throw new ApiError(404, "Waste price not found for the specified category");
+  return deletedPrice;
+};

@@ -1,17 +1,42 @@
-import { Router } from 'express';
-import { protect } from '../middlewares/auth.middleware.js';
-import { checkLocationServiceability, getDistrictServiceability, patchDistrictServiceability, getRadiusServiceAreas, postRadiusServiceArea, patchRadiusServiceArea } from '../controllers/serviceArea.controller.js';
+import { Router } from "express";
+import { protect } from "../middlewares/auth.middleware.js";
+import {
+  checkLocationServiceability,
+  getDistrictServiceability,
+  patchDistrictServiceability,
+  getRadiusServiceAreas,
+  postRadiusServiceArea,
+  patchRadiusServiceArea,
+  deleteRadiusServiceArea
+} from "../controllers/serviceArea.controller.js";
 
 const router = Router();
-const administratorOnly = (req, _res, next) => ['ROL_1', 'ROL_2', 'SuperAdmin', 'Admin'].includes(req.user?.role)
-  ? next()
-  : next(Object.assign(new Error('Only administrators can manage district serviceability.'), { statusCode: 403 }));
+const administratorOnly = (req, _res, next) =>
+  ["ROL_1", "ROL_2", "SuperAdmin", "Admin"].includes(req.user?.role)
+    ? next()
+    : next(
+        Object.assign(
+          new Error("Only administrators can manage district serviceability."),
+          { statusCode: 403 },
+        ),
+      );
 const checksByIp = new Map();
 const limitPublicChecks = (req, _res, next) => {
-  const now = Date.now(), key = req.ip || 'unknown', current = checksByIp.get(key);
-  if (!current || current.resetAt <= now) checksByIp.set(key, { count: 1, resetAt: now + 60000 });
-  else if (++current.count > 40) return next(Object.assign(new Error('Too many location checks. Please try again shortly.'), { statusCode: 429 }));
-  if (checksByIp.size > 5000) for (const [ip, item] of checksByIp) if (item.resetAt <= now) checksByIp.delete(ip);
+  const now = Date.now(),
+    key = req.ip || "unknown",
+    current = checksByIp.get(key);
+  if (!current || current.resetAt <= now)
+    checksByIp.set(key, { count: 1, resetAt: now + 60000 });
+  else if (++current.count > 40)
+    return next(
+      Object.assign(
+        new Error("Too many location checks. Please try again shortly."),
+        { statusCode: 429 },
+      ),
+    );
+  if (checksByIp.size > 5000)
+    for (const [ip, item] of checksByIp)
+      if (item.resetAt <= now) checksByIp.delete(ip);
   next();
 };
 
@@ -36,7 +61,7 @@ const limitPublicChecks = (req, _res, next) => {
  *       400: { description: Invalid coordinates }
  *       503: { description: District boundary data is not configured }
  */
-router.post('/check-location', limitPublicChecks, checkLocationServiceability);
+router.post("/check-location", limitPublicChecks, checkLocationServiceability);
 /**
  * @swagger
  * /service-areas/districts:
@@ -49,7 +74,7 @@ router.post('/check-location', limitPublicChecks, checkLocationServiceability);
  *       401: { description: Authentication required }
  *       403: { description: Administrator access required }
  */
-router.get('/districts', protect, administratorOnly, getDistrictServiceability);
+router.get("/districts", protect, administratorOnly, getDistrictServiceability);
 /**
  * @swagger
  * /service-areas/districts/{id}/status:
@@ -77,7 +102,12 @@ router.get('/districts', protect, administratorOnly, getDistrictServiceability);
  *       403: { description: Administrator access required }
  *       404: { description: Supported district not found }
  */
-router.patch('/districts/:id/status', protect, administratorOnly, patchDistrictServiceability);
+router.patch(
+  "/districts/:id/status",
+  protect,
+  administratorOnly,
+  patchDistrictServiceability,
+);
 
 /**
  * @swagger
@@ -110,8 +140,8 @@ router.patch('/districts/:id/status', protect, administratorOnly, patchDistrictS
  *       400: { description: Invalid name, coordinates, or radius }
  *       403: { description: Administrator access required }
  */
-router.get('/radii', protect, administratorOnly, getRadiusServiceAreas);
-router.post('/radii', protect, administratorOnly, postRadiusServiceArea);
+router.get("/radii", protect, administratorOnly, getRadiusServiceAreas);
+router.post("/radii", protect, administratorOnly, postRadiusServiceArea);
 /**
  * @swagger
  * /service-areas/radii/{id}/status:
@@ -138,6 +168,12 @@ router.post('/radii', protect, administratorOnly, postRadiusServiceArea);
  *       403: { description: Administrator access required }
  *       404: { description: Radius service area not found }
  */
-router.patch('/radii/:id/status', protect, administratorOnly, patchRadiusServiceArea);
+router.patch(
+  "/radii/:id/status",
+  protect,
+  administratorOnly,
+  patchRadiusServiceArea,
+);
+router.delete("/radii/:id", protect, administratorOnly, deleteRadiusServiceArea);
 
 export default router;

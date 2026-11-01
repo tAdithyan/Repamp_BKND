@@ -19,7 +19,7 @@ export const upsertWastePriceController = async (req, res, next) => {
     const { pricePerKg, newCategory } = req.body;
     const price = await upsertWastePrice(req.params.category, pricePerKg, newCategory);
     const message = newCategory
-      ? "Waste category updated successfully"
+      ? "Waste category updated "
       : "Waste price saved ";
     res.status(200).json(new ApiResponse(200, price, message));
   } catch (error) {

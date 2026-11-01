@@ -265,7 +265,7 @@ export const assertPickupDistrictServiceable = async (
 };
 
 
-export const deleteRadiusServiceArea = async (
+export const deleteRadiusServiceAreas = async (
   id,
   adminId,
   ServiceAreaModel = ServiceArea,

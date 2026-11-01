@@ -30,7 +30,7 @@ export const upsertWastePriceController = async (req, res, next) => {
 export const deleteWastePriceController = async (req, res, next) => {
   try {
     const price = await deleteWastePrice(req.params.category);
-    res.status(200).json(new ApiResponse(200, price, "Waste price deleted successfully"));
+    res.status(200).json(new ApiResponse(200, price, "Waste price deleted "));
   } catch (error) {
     next(error);
   }
